@@ -28,8 +28,8 @@ try:
     from diffusers.loaders.single_file_utils import (
         convert_ldm_vae_checkpoint, 
         convert_ldm_unet_checkpoint, 
-        create_vae_diffusers_config, 
-        create_unet_diffusers_config,
+        create_vae_diffusers_config_from_ldm, 
+        create_unet_diffusers_config_from_ldm,
     )     
 except:
     raise ImportError("Diffusers version too old. Please update to 0.26.0 minimum.")
@@ -190,7 +190,7 @@ class champ_model_loader:
             sd = model.model.state_dict_for_saving(None, vae.get_sd(), None)
 
             # 1. vae
-            converted_vae_config = create_vae_diffusers_config(original_config, image_size=512)
+            converted_vae_config = create_vae_diffusers_config_from_ldm(original_config, sd, image_size=512)
             converted_vae = convert_ldm_vae_checkpoint(sd, converted_vae_config)
            
             with (init_empty_weights() if is_accelerate_available() else nullcontext()):
@@ -214,7 +214,7 @@ class champ_model_loader:
             print(f"VAE using dtype: {self.vae.dtype}")
             pbar.update(1)
             # 2. unet
-            converted_unet_config = create_unet_diffusers_config(original_config, image_size=512)
+            converted_unet_config = create_unet_diffusers_config_from_ldm(original_config, sd, image_size=512)
             converted_unet = convert_ldm_unet_checkpoint(sd, converted_unet_config)
             del sd
             reference_unet = UNet2DConditionModel(**converted_unet_config)
@@ -298,10 +298,10 @@ class champ_sampler:
             "frames": ("INT", {"default": 16, "min": 1, "max": 100, "step": 1}),
             "seed": ("INT", {"default": 0, "min": 0, "max": 0xffffffffffffffff}),
             "keep_model_loaded": ("BOOLEAN", {"default": True}),
-            "latent_image": ("LATENT", {"default": None}),
             "start_at_step": ("INT", {"default": 0, "min": 0, "max": 10000}),
         },
             "optional":{
+            "latent_image": ("LATENT", {"default": None}),
             "depth_tensors": ("IMAGE",),
             "normal_tensors": ("IMAGE",),
             "semantic_tensors": ("IMAGE",),
@@ -330,7 +330,7 @@ class champ_sampler:
     CATEGORY = "champWrapper"
 
     def process(self, champ_model, champ_vae, champ_encoder, image, width, height, 
-                guidance_scale, steps, seed, keep_model_loaded, frames, latent_image, start_at_step, style_fidelity=1.0, depth_tensors=None, normal_tensors=None, semantic_tensors=None, dwpose_tensors=None, scheduler='DDIMScheduler'):
+                guidance_scale, steps, seed, keep_model_loaded, frames, start_at_step, latent_image=None, style_fidelity=1.0, depth_tensors=None, normal_tensors=None, semantic_tensors=None, dwpose_tensors=None, scheduler='DDIMScheduler'):
         device = mm.get_torch_device()
         mm.unload_all_models()
         mm.soft_empty_cache()
